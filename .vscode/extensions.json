@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.pylint",
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    "amazonwebservices.aws-toolkit-vscode",
+    "ms-vscode.vscode-eslint",
+    "esbenp.prettier-vscode"
+  ]
+}

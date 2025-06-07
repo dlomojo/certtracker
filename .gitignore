@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# CDK
+cdk.out/
+*.d.ts
+*.js
+!jest.config.js
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+
+# IDEs
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+build/
+dist/
+*.tgz
+
+# AWS
+.aws/
+
+# Environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
