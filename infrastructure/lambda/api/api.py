@@ -1,184 +1,270 @@
-# infrastructure/lambda/api/api.py
 import json
 import boto3
 import os
-from datetime import datetime
 import uuid
+import base64
+import hmac
+import hashlib
+from datetime import datetime
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# AWS clients
+dynamodb = boto3.resource('dynamodb')
+cognito = boto3.client('cognito-idp')
+
+# Environment variables
+USERS_TABLE = os.environ.get('USERS_TABLE', 'CertTracker-Users')
+CERTIFICATIONS_TABLE = os.environ.get('CERTIFICATIONS_TABLE', 'CertTracker-Certifications')
+USER_POOL_ID = os.environ.get('USER_POOL_ID')
+CLIENT_ID = os.environ.get('USER_POOL_CLIENT_ID')
 
 def handler(event, context):
-    """
-    Main API handler for CertTracker
-    Routes requests to appropriate functions
-    """
+    """Main API handler with production auth"""
     
-    print(f"Event: {json.dumps(event)}")
+    logger.info(f"Event: {json.dumps(event)}")
     
-    try:
-        # Get HTTP method and path
-        http_method = event.get('httpMethod')
-        path = event.get('path', '/')
-        
-        # Handle different routes
-        if path.startswith('/auth'):
-            return handle_auth(event, context)
-        elif path.startswith('/certifications'):
-            return handle_certifications(event, context)
-        else:
-            return {
-                'statusCode': 404,
-                'headers': get_cors_headers(),
-                'body': json.dumps({'error': 'Route not found'})
-            }
-            
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': get_cors_headers(),
-            'body': json.dumps({'error': 'Internal server error'})
-        }
-
-def handle_auth(event, context):
-    """Handle authentication related requests"""
-    return {
-        'statusCode': 200,
-        'headers': get_cors_headers(),
-        'body': json.dumps({'message': 'Auth endpoint - to be implemented'})
-    }
-
-def handle_certifications(event, context):
-    """Handle certification CRUD operations"""
-    
-    http_method = event.get('httpMethod')
-    path_parameters = event.get('pathParameters') or {}
-    
-    if http_method == 'GET':
-        if 'id' in path_parameters:
-            return get_certification(event, context)
-        else:
-            return list_certifications(event, context)
-    elif http_method == 'POST':
-        return create_certification(event, context)
-    elif http_method == 'PUT':
-        return update_certification(event, context)
-    elif http_method == 'DELETE':
-        return delete_certification(event, context)
-    else:
-        return {
-            'statusCode': 405,
-            'headers': get_cors_headers(),
-            'body': json.dumps({'error': 'Method not allowed'})
-        }
-
-def list_certifications(event, context):
-    """List all certifications for a user"""
-    # TODO: Get user ID from Cognito JWT token
-    # For now, return mock data
-    
-    mock_certifications = [
-        {
-            'certId': '1',
-            'name': 'CompTIA Security+',
-            'provider': 'CompTIA',
-            'issueDate': '2022-01-15',
-            'expirationDate': '2025-01-15',
-            'status': 'active'
-        },
-        {
-            'certId': '2', 
-            'name': 'AWS Solutions Architect',
-            'provider': 'AWS',
-            'issueDate': '2023-06-01',
-            'expirationDate': '2026-06-01',
-            'status': 'active'
-        }
-    ]
-    
-    return {
-        'statusCode': 200,
-        'headers': get_cors_headers(),
-        'body': json.dumps(mock_certifications)
-    }
-
-def get_certification(event, context):
-    """Get a specific certification"""
-    cert_id = event['pathParameters']['id']
-    
-    return {
-        'statusCode': 200,
-        'headers': get_cors_headers(),
-        'body': json.dumps({
-            'certId': cert_id,
-            'message': f'Get certification {cert_id} - to be implemented'
-        })
-    }
-
-def create_certification(event, context):
-    """Create a new certification"""
-    
-    try:
-        body = json.loads(event.get('body', '{}'))
-        
-        # Basic validation
-        required_fields = ['name', 'provider', 'issueDate', 'expirationDate']
-        for field in required_fields:
-            if field not in body:
-                return {
-                    'statusCode': 400,
-                    'headers': get_cors_headers(),
-                    'body': json.dumps({'error': f'Missing required field: {field}'})
-                }
-        
-        # TODO: Save to DynamoDB
-        cert_id = str(uuid.uuid4())
-        
-        return {
-            'statusCode': 201,
-            'headers': get_cors_headers(),
-            'body': json.dumps({
-                'certId': cert_id,
-                'message': 'Certification created successfully'
-            })
-        }
-        
-    except json.JSONDecodeError:
-        return {
-            'statusCode': 400,
-            'headers': get_cors_headers(),
-            'body': json.dumps({'error': 'Invalid JSON in request body'})
-        }
-
-def update_certification(event, context):
-    """Update an existing certification"""
-    cert_id = event['pathParameters']['id']
-    
-    return {
-        'statusCode': 200,
-        'headers': get_cors_headers(),
-        'body': json.dumps({
-            'certId': cert_id,
-            'message': f'Update certification {cert_id} - to be implemented'
-        })
-    }
-
-def delete_certification(event, context):
-    """Delete a certification"""
-    cert_id = event['pathParameters']['id']
-    
-    return {
-        'statusCode': 200,
-        'headers': get_cors_headers(),
-        'body': json.dumps({
-            'certId': cert_id,
-            'message': f'Delete certification {cert_id} - to be implemented'
-        })
-    }
-
-def get_cors_headers():
-    """Return CORS headers for API responses"""
-    return {
+    headers = {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
         'Content-Type': 'application/json'
     }
+    
+    try:
+        method = event.get('httpMethod')
+        path = event.get('path', '/')
+        
+        if method == 'OPTIONS':
+            return {'statusCode': 200, 'headers': headers, 'body': ''}
+        
+        if path.startswith('/auth'):
+            return handle_auth(event, headers)
+        elif path.startswith('/certifications'):
+            return handle_certifications(event, headers)
+        else:
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Not found'})}
+            
+    except Exception as e:
+        logger.error(f"Error: {str(e)}")
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def handle_auth(event, headers):
+    """Handle authentication with Cognito"""
+    
+    method = event.get('httpMethod')
+    body = json.loads(event.get('body', '{}'))
+    
+    if method == 'POST':
+        if 'name' in body:  # Registration
+            return register_user(body, headers)
+        else:  # Login
+            return login_user(body, headers)
+    
+    return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Invalid request'})}
+
+def register_user(body, headers):
+    """Register user with Cognito"""
+    
+    try:
+        email = body['email']
+        password = body['password']
+        name = body['name']
+        
+        # Create user in Cognito
+        response = cognito.admin_create_user(
+            UserPoolId=USER_POOL_ID,
+            Username=email,
+            UserAttributes=[
+                {'Name': 'email', 'Value': email},
+                {'Name': 'name', 'Value': name},
+                {'Name': 'email_verified', 'Value': 'true'}
+            ],
+            TemporaryPassword=password,
+            MessageAction='SUPPRESS'
+        )
+        
+        # Set permanent password
+        cognito.admin_set_user_password(
+            UserPoolId=USER_POOL_ID,
+            Username=email,
+            Password=password,
+            Permanent=True
+        )
+        
+        # Store user profile
+        user_id = response['User']['Username']
+        users_table = dynamodb.Table(USERS_TABLE)
+        
+        users_table.put_item(Item={
+            'userId': user_id,
+            'email': email,
+            'name': name,
+            'createdAt': datetime.utcnow().isoformat()
+        })
+        
+        return {
+            'statusCode': 201,
+            'headers': headers,
+            'body': json.dumps({
+                'message': 'User registered successfully',
+                'user': {'id': user_id, 'email': email, 'name': name}
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def login_user(body, headers):
+    """Login with Cognito and return JWT tokens"""
+    
+    try:
+        email = body['email']
+        password = body['password']
+        
+        # Calculate secret hash for Cognito
+        secret_hash = calculate_secret_hash(email)
+        
+        # Authenticate with Cognito
+        response = cognito.admin_initiate_auth(
+            UserPoolId=USER_POOL_ID,
+            ClientId=CLIENT_ID,
+            AuthFlow='ADMIN_NO_SRP_AUTH',
+            AuthParameters={
+                'USERNAME': email,
+                'PASSWORD': password,
+                'SECRET_HASH': secret_hash
+            }
+        )
+        
+        # Get user details
+        user_response = cognito.admin_get_user(
+            UserPoolId=USER_POOL_ID,
+            Username=email
+        )
+        
+        # Extract user attributes
+        user_attrs = {attr['Name']: attr['Value'] for attr in user_response['UserAttributes']}
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'message': 'Login successful',
+                'user': {
+                    'id': user_response['Username'],
+                    'email': user_attrs.get('email'),
+                    'name': user_attrs.get('name')
+                },
+                'tokens': {
+                    'AccessToken': response['AuthenticationResult']['AccessToken'],
+                    'IdToken': response['AuthenticationResult']['IdToken'],
+                    'RefreshToken': response['AuthenticationResult']['RefreshToken']
+                }
+            })
+        }
+        
+    except cognito.exceptions.NotAuthorizedException:
+        return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Invalid credentials'})}
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def calculate_secret_hash(username):
+    """Calculate secret hash for Cognito client"""
+    
+    client_secret = os.environ.get('CLIENT_SECRET', '')
+    if not client_secret:
+        return None
+        
+    message = username + CLIENT_ID
+    key = client_secret.encode('utf-8')
+    message = message.encode('utf-8')
+    
+    dig = hmac.new(key, message, hashlib.sha256).digest()
+    return base64.b64encode(dig).decode()
+
+def handle_certifications(event, headers):
+    """Handle certification endpoints - protected by Cognito"""
+    
+    # For Cognito-protected endpoints, user info is in requestContext
+    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub')
+    
+    if not user_id:
+        return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Unauthorized'})}
+    
+    method = event.get('httpMethod')
+    
+    if method == 'GET':
+        return get_certifications(user_id, headers)
+    elif method == 'POST':
+        return create_certification(event, user_id, headers)
+    
+    return {'statusCode': 405, 'headers': headers, 'body': json.dumps({'error': 'Method not allowed'})}
+
+def get_certifications(user_id, headers):
+    """Get user's certifications from DynamoDB"""
+    
+    try:
+        certs_table = dynamodb.Table(CERTIFICATIONS_TABLE)
+        
+        response = certs_table.query(
+            KeyConditionExpression='userId = :uid',
+            ExpressionAttributeValues={':uid': user_id}
+        )
+        
+        certifications = response.get('Items', [])
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'certifications': certifications,
+                'count': len(certifications)
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Get certifications error: {str(e)}")
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def create_certification(event, user_id, headers):
+    """Create new certification"""
+    
+    try:
+        body = json.loads(event.get('body', '{}'))
+        cert_id = str(uuid.uuid4())
+        
+        certs_table = dynamodb.Table(CERTIFICATIONS_TABLE)
+        
+        certification = {
+            'userId': user_id,
+            'certId': cert_id,
+            'name': body['name'],
+            'provider': body['provider'],
+            'issueDate': body['issueDate'],
+            'expiryDate': body['expiryDate'],
+            'status': 'active',
+            'reminderDays': body.get('reminderDays', [90, 60, 30, 7]),
+            'createdAt': datetime.utcnow().isoformat(),
+            'updatedAt': datetime.utcnow().isoformat()
+        }
+        
+        certs_table.put_item(Item=certification)
+        
+        return {
+            'statusCode': 201,
+            'headers': headers,
+            'body': json.dumps({
+                'id': cert_id,
+                'message': 'Certification created successfully',
+                'certification': certification
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Create certification error: {str(e)}")
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}

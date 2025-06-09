@@ -94,6 +94,17 @@ export class CertTrackerStack extends cdk.Stack {
     certificationsTable.grantReadData(notificationLambda);
     usersTable.grantReadData(notificationLambda);
 
+    // Grant Cognito permissions to API Lambda
+    apiLambda.addToRolePolicy(new iam.PolicyStatement({
+    actions: [
+    'cognito-idp:AdminCreateUser',
+    'cognito-idp:AdminSetUserPassword', 
+    'cognito-idp:AdminInitiateAuth',
+    'cognito-idp:AdminGetUser'
+      ],
+      resources: [userPool.userPoolArn],
+    }));
+
     // Grant SES permissions
     notificationLambda.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ses:SendEmail', 'ses:SendRawEmail'],
