@@ -2,37 +2,48 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "CDK Deploy",
+      "label": "Deploy to AWS",
       "type": "shell",
-      "command": "npm run deploy",
+      "command": "./deploy.sh",
       "group": "build",
-      "options": {
-        "cwd": "${workspaceFolder}/infrastructure"
-      },
       "presentation": {
         "echo": true,
         "reveal": "always",
         "focus": false,
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "CDK Diff",
-      "type": "shell",
-      "command": "npm run diff",
-      "group": "build",
-      "options": {
-        "cwd": "${workspaceFolder}/infrastructure"
-      }
-    },
-    {
-      "label": "Start Frontend Dev",
-      "type": "shell",
-      "command": "npm start",
-      "group": "build",
+        "panel": "new"
+      },
       "options": {
         "cwd": "${workspaceFolder}/frontend"
-      }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Quick Deploy",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/quickDeploy.js"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Watch and Auto-Deploy",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/watchAndDeploy.js"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "isBackground": true
     }
   ]
 }

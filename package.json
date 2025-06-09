@@ -1,7 +1,9 @@
 {
-  "devDependencies": {
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.4",
-    "tailwindcss": "^4.1.8"
+  "scripts": {
+	"deploy": "npm run build && ./deploy.sh",
+	"quick-deploy": "node scripts/quickDeploy.js",
+	"watch-deploy": "node scripts/watchAndDeploy.js",
+	"aws:get-config": "./scripts/getAwsConfig.sh"
   }
 }
+
