@@ -61,6 +61,7 @@ export class CertTrackerStack extends cdk.Stack {
       authFlows: {
         userPassword: true,
         userSrp: true,
+        adminUserPassword: true,
       },
     });
 
@@ -73,6 +74,7 @@ export class CertTrackerStack extends cdk.Stack {
         USERS_TABLE: usersTable.tableName,
         CERTIFICATIONS_TABLE: certificationsTable.tableName,
         USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       },
       timeout: cdk.Duration.seconds(30),
     });

@@ -125,19 +125,23 @@ def login_user(body, headers):
         email = body['email']
         password = body['password']
         
-        # Calculate secret hash for Cognito
-        secret_hash = calculate_secret_hash(email)
+        # Build auth parameters
+        auth_params = {
+            'USERNAME': email,
+            'PASSWORD': password
+        }
+        
+        # Only add SECRET_HASH if client secret exists
+        client_secret = os.environ.get('CLIENT_SECRET')
+        if client_secret:
+            auth_params['SECRET_HASH'] = calculate_secret_hash(email)
         
         # Authenticate with Cognito
         response = cognito.admin_initiate_auth(
             UserPoolId=USER_POOL_ID,
             ClientId=CLIENT_ID,
             AuthFlow='ADMIN_NO_SRP_AUTH',
-            AuthParameters={
-                'USERNAME': email,
-                'PASSWORD': password,
-                'SECRET_HASH': secret_hash
-            }
+            AuthParameters=auth_params
         )
         
         # Get user details
@@ -190,11 +194,38 @@ def calculate_secret_hash(username):
 def handle_certifications(event, headers):
     """Handle certification endpoints - protected by Cognito"""
     
-    # For Cognito-protected endpoints, user info is in requestContext
-    user_id = event.get('requestContext', {}).get('authorizer', {}).get('claims', {}).get('sub')
+    # Debug: Log the entire event to see structure
+    logger.info(f"Full event: {json.dumps(event)}")
+    
+    # Try different paths for user info
+    user_id = None
+    request_context = event.get('requestContext', {})
+    
+    # Method 1: Standard Cognito authorizer
+    if 'authorizer' in request_context:
+        claims = request_context['authorizer'].get('claims', {})
+        user_id = claims.get('sub') or claims.get('cognito:username')
+        logger.info(f"Method 1 - Claims: {claims}")
+    
+    # Method 2: Direct in requestContext
+    if not user_id:
+        user_id = request_context.get('identity', {}).get('cognitoIdentityId')
+        logger.info(f"Method 2 - Identity: {request_context.get('identity')}")
+    
+    logger.info(f"Extracted user_id: {user_id}")
     
     if not user_id:
-        return {'statusCode': 401, 'headers': headers, 'body': json.dumps({'error': 'Unauthorized'})}
+        return {
+            'statusCode': 401, 
+            'headers': headers, 
+            'body': json.dumps({
+                'error': 'Unauthorized', 
+                'debug': {
+                    'requestContext': request_context,
+                    'hasAuthorizer': 'authorizer' in request_context
+                }
+            })
+        }
     
     method = event.get('httpMethod')
     
