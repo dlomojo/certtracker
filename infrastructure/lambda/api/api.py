@@ -271,6 +271,18 @@ def create_certification(event, user_id, headers):
         
         certs_table = dynamodb.Table(CERTIFICATIONS_TABLE)
         
+        # Calculate status based on expiry date
+        expiry_date = datetime.strptime(body['expiryDate'], '%Y-%m-%d').date()
+        today = datetime.now().date()
+        days_until_expiry = (expiry_date - today).days
+        
+        if days_until_expiry < 0:
+            status = 'expired'
+        elif days_until_expiry <= 30:
+            status = 'expiring'
+        else:
+            status = 'active'
+        
         certification = {
             'userId': user_id,
             'certId': cert_id,
@@ -278,7 +290,7 @@ def create_certification(event, user_id, headers):
             'provider': body['provider'],
             'issueDate': body['issueDate'],
             'expiryDate': body['expiryDate'],
-            'status': 'active',
+            'status': status,
             'reminderDays': body.get('reminderDays', [90, 60, 30, 7]),
             'createdAt': datetime.utcnow().isoformat(),
             'updatedAt': datetime.utcnow().isoformat()
