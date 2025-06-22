@@ -2,8 +2,9 @@
   "scripts": {
 	"deploy": "npm run build && ./deploy.sh",
 	"quick-deploy": "node scripts/quickDeploy.js",
-	"watch-deploy": "node scripts/watchAndDeploy.js",
-	"aws:get-config": "./scripts/getAwsConfig.sh"
+        "watch-deploy": "node scripts/watchAndDeploy.js",
+        "aws:get-config": "./scripts/getAwsConfig.sh",
+        "deploy-frontend": "./scripts/deploy_frontend.sh"
   }
 }
 

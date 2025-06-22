@@ -29,6 +29,11 @@ A serverless web application for tracking IT certifications and sending expirati
    npm run deploy
    ```
 
+4. **Deploy frontend:**
+   ```bash
+   ./scripts/deploy_frontend.sh <your-s3-bucket-name>
+   ```
+
 ## Architecture
 
 - **Frontend**: React SPA hosted on S3 + CloudFront
@@ -42,6 +47,7 @@ A serverless web application for tracking IT certifications and sending expirati
 - **VS Code**: Optimized for VS Code with debugging support
 - **Local Development**: Python virtual environment for Lambda testing
 - **Hot Reload**: Frontend development server
+- **Pages**: Each page is a separate component in `frontend/src/pages`
 - **Infrastructure**: CDK for infrastructure as code
 
 ## Cost
